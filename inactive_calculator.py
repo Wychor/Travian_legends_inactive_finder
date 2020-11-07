@@ -3,17 +3,24 @@ from pathlib import Path
 
 
 def main():
-    inactives_all_dates = get_lists()
-
+    vil_pop_cutoff = 100
+    acc_pop_cutoff = 200
+    acc_vil_cutoff = 2
+    vil_growth_cutoff = 2
+    acc_growth_cutoff = 9999
+    my_x = 92
+    my_y = -109
+    days_to_compare = 3
+    inactives_all_dates = get_lists(days_to_compare)
     inverted_inactives_all_dates = [invert_list(my_list) for my_list in inactives_all_dates]
     test_list_inversion(inactives_all_dates[0], inverted_inactives_all_dates[0])
 
-    inactives = invert_list(compare_villages(inverted_inactives_all_dates))
-    player_stats = get_player_stats(inactives)
-    filtered_inactives = filter_players(inactives, player_stats, 200, 9999, 2)
+    inactives = invert_list(add_pop_previous_dates(inverted_inactives_all_dates, days_to_compare))
+    player_stats = get_player_stats(inactives, days_to_compare)
+    filtered_inactives = filter_players(inactives, player_stats, acc_pop_cutoff, acc_growth_cutoff, acc_vil_cutoff)
 
-    no_growth = filter_villages(filtered_inactives, 2, 200)
-    incl_distance = add_distance(no_growth, 92, -109)
+    no_growth = filter_villages(filtered_inactives, vil_growth_cutoff, vil_pop_cutoff)
+    incl_distance = add_distance(no_growth, my_x, my_y)
     sorted_inactives = sort_distance(incl_distance)
     sorted_inactives = add_links(sorted_inactives)
 
@@ -21,17 +28,16 @@ def main():
 
 
 class Player:
-    def __init__(self, p_id):
+    def __init__(self, p_id, days_to_compare):
         self.id = p_id
         self.villages = []
-        self.pop_today = 0
-        self.pop_yesterday = 0
-        self.difference = 0
+        self.pop = [0] * days_to_compare
+        self.differences = [0] * (days_to_compare-1)
 
 
-def get_lists(server="latesummer1x"):
+def get_lists(days_to_compare, server="latesummer1x"):
     inactives_all_dates = []
-    for i in reversed(range(2)):
+    for i in reversed(range(days_to_compare)):
         filename = "input/" + server + "_inactives_" + str(datetime.date.today() - datetime.timedelta(i)) + ".txt"
         if Path(filename).is_file():
             inactives_all_dates.append(file_to_2d_list(filename))
@@ -69,24 +75,20 @@ def test_list_inversion(my_list, my_inverted_list):
     assert (my_list[10][3] == my_inverted_list[3][10])
 
 
-def compare_villages(inverted_inactives_all_dates):
-    inactives = add_pop_previous_date(inverted_inactives_all_dates)
-    difference = list_subtraction(inactives[-1][1:], inactives[-2][1:], "difference")
-    inactives.append(difference)
-    return inactives
-
-
-def add_pop_previous_date(inverted_inactives_all_dates):
+def add_pop_previous_dates(inverted_inactives_all_dates, days_to_compare):
     inactives = inverted_inactives_all_dates[0]
-    inactives_previous_date = inverted_inactives_all_dates[1]
-    pop_previous_date = ["Pop_d-1"]
-    for i in range(1, len(inactives[0])):
-        try:
-            index = inactives_previous_date[4].index(inactives[4][i])
-            pop_previous_date.append(inactives_previous_date[10][index])
-        except ValueError:
-            pop_previous_date.append(0)
-    inactives.append(pop_previous_date)
+    for j in range(1, days_to_compare):
+        inactives_previous_date = inverted_inactives_all_dates[j]
+        pop_previous_date = ["Pop_d-" + str(j)]
+        for i in range(1, len(inactives[0])):
+            try:
+                index = inactives_previous_date[4].index(inactives[4][i])
+                pop_previous_date.append(inactives_previous_date[10][index])
+            except ValueError:
+                pop_previous_date.append(0)
+        inactives.append(pop_previous_date)
+        difference = list_subtraction(inactives[10][1:], pop_previous_date[1:], "difference" + str(j))
+        inactives.append(difference)
     return inactives
 
 
@@ -97,17 +99,18 @@ def list_subtraction(list1, list2, title=None):
     return title + [int(list1[i])-int(list2[i]) for i in range(len(list1))]
 
 
-def get_player_stats(inactives):
+def get_player_stats(inactives, days_to_compare):
     inverted_inactives = invert_list(inactives)
     players = set(inverted_inactives[6][1:])
     player_stats = []
     for player in players:
-        p = Player(player)
+        p = Player(player, days_to_compare)
         for i in range(1, len(inactives)):
             if inactives[i][6] == player:
-                p.pop_today += int(inactives[i][-3])
-                p.pop_yesterday += int(inactives[i][-2])
-                p.difference += int(inactives[i][-1])
+                p.pop[0] += int(inactives[i][10])
+                for j in range(1, days_to_compare):
+                    p.pop[j] += int(inactives[i][9+j*2])
+                    p.differences[j-1] += int(inactives[i][10+j*2])
                 p.villages.append(inactives[i][4])
 
         player_stats.append(p)
@@ -115,12 +118,12 @@ def get_player_stats(inactives):
 
 
 def filter_players(inactives, player_stats, pop_cutoff=9999, growth_cutoff=9999, vil_cutoff=9999):
-    player_ids = [player.id for player in player_stats if player.pop_today <= pop_cutoff and player.difference <= growth_cutoff and len(player.villages) <= vil_cutoff]
+    player_ids = [player.id for player in player_stats if player.pop[0] <= pop_cutoff and player.differences[0] <= growth_cutoff and len(player.villages) <= vil_cutoff]
     return [inactives[0]] + [inactives[i] for i in range(1, len(inactives)) if inactives[i][6] in player_ids]
 
 
 def filter_villages(inactives, growth_cutoff, pop_cutoff):
-    return [inactives[0]] + [inactives[i] for i in range(1, len(inactives)) if int(inactives[i][-1]) <= growth_cutoff and int(inactives[i][-3]) <= pop_cutoff]
+    return [inactives[0]] + [inactives[i] for i in range(1, len(inactives)) if int(inactives[i][12]) <= growth_cutoff and int(inactives[i][10]) <= pop_cutoff]
 
 
 def add_distance(inactives, x, y):
