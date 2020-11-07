@@ -131,3 +131,5 @@ dmypy.json
 
 .idea
 /input/*
+/farmlist_parser.py
+farmlist_parser.*
