@@ -3,28 +3,49 @@ from pathlib import Path
 
 
 def main():
-    vil_pop_cutoff = 100
-    acc_pop_cutoff = 200
-    acc_vil_cutoff = 2
-    vil_growth_cutoff = 2
-    acc_growth_cutoff = 9999
-    my_x = 92
-    my_y = -109
+    vil_pop_max = 9999
+    vil_pop_min = 0
+    acc_pop_max = 9999
+    acc_vil_max = 9999
+    vil_growth_max = 0
+    acc_growth_max = 0
+    my_x = -35
+    my_y = -1
     days_to_compare = 3
-    inactives_all_dates = get_lists(days_to_compare)
+    server = "ts81"
+    safety = False
+    filter_farmlist = False
+    inactives_all_dates = get_lists(days_to_compare, server)
     inverted_inactives_all_dates = [invert_list(my_list) for my_list in inactives_all_dates]
     test_list_inversion(inactives_all_dates[0], inverted_inactives_all_dates[0])
 
     inactives = invert_list(add_pop_previous_dates(inverted_inactives_all_dates, days_to_compare))
     player_stats = get_player_stats(inactives, days_to_compare)
-    filtered_inactives = filter_players(inactives, player_stats, acc_pop_cutoff, acc_growth_cutoff, acc_vil_cutoff)
+    filtered_inactives = filter_players(inactives, player_stats, acc_pop_max, acc_growth_max, acc_vil_max)
 
-    no_growth = filter_villages(filtered_inactives, vil_growth_cutoff, vil_pop_cutoff)
+    no_growth = filter_villages(filtered_inactives, vil_growth_max, vil_pop_max, vil_pop_min)
+    if filter_farmlist:
+        farms = read_farmlist(server)
+        no_growth = filter_farms(no_growth, farms)
     incl_distance = add_distance(no_growth, my_x, my_y)
     sorted_inactives = sort_distance(incl_distance)
-    sorted_inactives = add_links(sorted_inactives)
+    sorted_inactives = add_links(sorted_inactives, server)
 
-    export_stats(sorted_inactives)
+    export_stats(sorted_inactives, server, safety, str(my_x) + "_" + str(my_y))
+
+
+def read_farmlist(server):
+    farms = file_to_2d_list("output/" + server + "_farms_" + str(datetime.date.today()) + ".tsv")[0]
+    farms = process_farmlist(farms)
+    return farms
+
+
+def filter_farms(inactives, farms):
+    return [inactives[0]] + [vil for vil in inactives[1:] if (int(vil[1]), int(vil[2])) not in farms]
+
+
+def process_farmlist(farms):
+    return [tuple(map(int, farm.replace("'", "").replace("(", "").replace(")", "").split(", "))) for farm in farms]
 
 
 class Player:
@@ -35,9 +56,9 @@ class Player:
         self.differences = [0] * (days_to_compare-1)
 
 
-def get_lists(days_to_compare, server="latesummer1x"):
+def get_lists(days_to_compare, server):
     inactives_all_dates = []
-    for i in reversed(range(days_to_compare)):
+    for i in range(days_to_compare):
         filename = "input/" + server + "_inactives_" + str(datetime.date.today() - datetime.timedelta(i)) + ".txt"
         if Path(filename).is_file():
             inactives_all_dates.append(file_to_2d_list(filename))
@@ -117,13 +138,13 @@ def get_player_stats(inactives, days_to_compare):
     return player_stats
 
 
-def filter_players(inactives, player_stats, pop_cutoff=9999, growth_cutoff=9999, vil_cutoff=9999):
-    player_ids = [player.id for player in player_stats if player.pop[0] <= pop_cutoff and player.differences[0] <= growth_cutoff and len(player.villages) <= vil_cutoff]
+def filter_players(inactives, player_stats, pop_max=9999, growth_max=9999, vil_max=9999):
+    player_ids = [player.id for player in player_stats if player.pop[0] <= pop_max and player.differences[0] <= growth_max and len(player.villages) <= vil_max]
     return [inactives[0]] + [inactives[i] for i in range(1, len(inactives)) if inactives[i][6] in player_ids]
 
 
-def filter_villages(inactives, growth_cutoff, pop_cutoff):
-    return [inactives[0]] + [inactives[i] for i in range(1, len(inactives)) if int(inactives[i][12]) <= growth_cutoff and int(inactives[i][10]) <= pop_cutoff]
+def filter_villages(inactives, growth_max, pop_max, pop_min=0):
+    return [inactives[0]] + [inactives[i] for i in range(1, len(inactives)) if int(inactives[i][12]) <= growth_max and pop_min <= int(inactives[i][10]) <= pop_max]
 
 
 def add_distance(inactives, x, y):
@@ -132,35 +153,41 @@ def add_distance(inactives, x, y):
 
 
 def calculate_distance(inactives, x, y):
-    return ["distance"] + [str(int((abs(int(inactives[i][1]) - x)**2 + abs(int(inactives[i][2]) - y)**2)**0.5)) for i in range(1, len(inactives))]
+    return ["distance"] + [str(round((abs(int(inactives[i][1]) - x)**2 + abs(int(inactives[i][2]) - y)**2)**0.5, 1)) for i in range(1, len(inactives))]
 
 
 def sort_distance(inactives):
     table = invert_list(inactives[1:])
-    table[-1] = [int(i) for i in table[-1]]
+    table[-1] = [float(i) for i in table[-1]]
     inv_table = invert_list(table)
     return [inactives[0]] + [inv_table[i] for i in sorted(range(len(table[-1])), key=lambda k: table[-1][k])]
 
 
-def add_links(inactives):
-    links = generate_links(inactives)
+def add_links(inactives, server):
+    links = generate_links(inactives, server)
     inactives = invert_list(inactives)
     inactives.append(links)
     return invert_list(inactives)
 
 
-def generate_links(inactives):
+def generate_links(inactives, server):
     links = ['links']
     for i in range(1, len(inactives)):
         x = inactives[i][1]
         y = inactives[i][2]
-        links.append("https://latesummer1x.travian.com/karte.php?x=" + str(x) + "&y=" + str(y))
+        links.append("https://" + server + ".travian.com/karte.php?x=" + str(x) + "&y=" + str(y))
     return links
 
 
-def export_stats(inactives):
-    with open("output/latesummer1x_inactives_" + str(datetime.date.today()) + ".tsv", "x", encoding="utf-8") as file:
-        file.writelines('\t'.join(str(j) for j in i) + '\n' for i in inactives)
+def export_stats(inactives, server, safety, extra=""):
+    if extra != "":
+        extra += "_"
+    if safety:
+        with open("output/" + server + extra + "_inactives_" + str(datetime.date.today()) + ".tsv", "x", encoding="utf-8") as file:
+            file.writelines('\t'.join(str(j) for j in i) + '\n' for i in inactives)
+    else:
+        with open("output/" + server + extra + "_inactives_" + str(datetime.date.today()) + ".tsv", "w", encoding="utf-8") as file:
+            file.writelines('\t'.join(str(j) for j in i) + '\n' for i in inactives)
 
 
 main()

@@ -3,7 +3,7 @@ from datetime import date
 
 
 def main():
-    servers = ["latesummer1x", "ts6", "ts5.anglosphere"]
+    servers = ["ts81", "ts5.anglosphere"]
     for server in servers:
         raw_data = get_data(server)
         line_starts, line_ends = find_lines(raw_data)
