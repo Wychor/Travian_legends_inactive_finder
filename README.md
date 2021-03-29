@@ -3,6 +3,7 @@
 This is an inactive finder for Travian Legends (https://www.travian.com/).
 This has been done before and better tools exist.
 HOWEVER, this tool is available to everyone not just to use, but to copy and make their own version of.
+It now also has a unique feature (as far as I know) that allows you to load and filter out farms that are already in your farmlist.
 
 ## Legal stuff
 I am going to keep the legal stuff simple.
@@ -20,7 +21,7 @@ Python
 
 ## Usage
 In its current state you need to adjust your settings in the files itself.
-Next up will be a reader that reads your farmlist HTML page, extracts the villages already in your farmlist and subtracts them from the results of the inactive finder.
+Next up... I don't know yet.
 Perhaps I'll turn this into a web based thingy. We'll see.
 
 Any suggestions, technical (performance and such) or features, are very much welcomed.

@@ -1,5 +1,6 @@
 import datetime
 from pathlib import Path
+import pandas as pd
 
 
 def main():
@@ -9,10 +10,10 @@ def main():
     acc_vil_max = 9999
     vil_growth_max = 0
     acc_growth_max = 0
-    my_x = -35
-    my_y = -1
-    days_to_compare = 3
-    server = "ts81"
+    my_x = 0
+    my_y = 0
+    days_to_compare = 2
+    server = "ts1.x1.international"
     safety = False
     filter_farmlist = False
     inactives_all_dates = get_lists(days_to_compare, server)
@@ -30,8 +31,10 @@ def main():
     incl_distance = add_distance(no_growth, my_x, my_y)
     sorted_inactives = sort_distance(incl_distance)
     sorted_inactives = add_links(sorted_inactives, server)
+    sorted_inactives = translate_tribes(sorted_inactives)
 
     export_stats(sorted_inactives, server, safety, str(my_x) + "_" + str(my_y))
+    export_to_html(server, safety, str(my_x) + "_" + str(my_y))
 
 
 def read_farmlist(server):
@@ -100,7 +103,7 @@ def add_pop_previous_dates(inverted_inactives_all_dates, days_to_compare):
     inactives = inverted_inactives_all_dates[0]
     for j in range(1, days_to_compare):
         inactives_previous_date = inverted_inactives_all_dates[j]
-        pop_previous_date = ["Pop_d-" + str(j)]
+        pop_previous_date = ["Pop_" + str(j) + "_days_ago"]
         for i in range(1, len(inactives[0])):
             try:
                 index = inactives_previous_date[4].index(inactives[4][i])
@@ -179,6 +182,13 @@ def generate_links(inactives, server):
     return links
 
 
+def translate_tribes(inactives):
+    tribes_translation = ["Roman", "Teuton", "Gaul", "Nature", "Natars", "Egyptian", "Huns"]
+    for i in range(1, len(inactives)):
+        inactives[i][3] = tribes_translation[int(inactives[i][3])-1]
+    return inactives
+
+
 def export_stats(inactives, server, safety, extra=""):
     if extra != "":
         extra += "_"
@@ -188,6 +198,26 @@ def export_stats(inactives, server, safety, extra=""):
     else:
         with open("output/" + server + extra + "_inactives_" + str(datetime.date.today()) + ".tsv", "w", encoding="utf-8") as file:
             file.writelines('\t'.join(str(j) for j in i) + '\n' for i in inactives)
+
+
+def export_to_html(server, safety, extra=""):
+    if extra != "":
+        extra += "_"
+
+    base_file_name = "output/" + server + extra + "_inactives_" + str(datetime.date.today())
+    df = pd.read_csv(base_file_name + ".tsv", sep="\t", header=0)
+    df = df.drop(["ID", "VID", "User_ID", "AID"], axis=1)
+    df['links'] = df.apply(lambda x: make_clickable(x['links'], x['links']), axis=1)
+    if safety:
+        with open(base_file_name + ".html", "x", encoding="utf-8") as html_file:
+            html_file.write(df.to_html(index=False, escape=False))
+    else:
+        with open(base_file_name + ".html", "w", encoding="utf-8") as html_file:
+            html_file.write(df.to_html(index=False, escape=False))
+
+
+def make_clickable(url, name):
+    return '<a href="{}" rel="noopener noreferrer" target="_blank">{}</a>'.format(url, name)
 
 
 main()

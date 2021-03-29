@@ -1,48 +1,53 @@
 import requests
 from datetime import date
 
+NUMBER_OF_COLUMNS_CONSTANT = 11
+
 
 def main():
-    servers = ["ts81", "ts5.anglosphere"]
+    servers = ["ts1.x1.international"]
     for server in servers:
-        raw_data = get_data(server)
-        line_starts, line_ends = find_lines(raw_data)
-        my_table = make_table(raw_data, line_starts, line_ends)
+        raw_map_data = get_map_sql_file(server)
+        line_starts, line_ends = find_villages(raw_map_data)
+        my_table = make_table(raw_map_data, line_starts, line_ends)
         with open("input/" + server + "_inactives_" + str(date.today()) + ".txt", "x", encoding="utf-8") as file:
             file.writelines('\t'.join(str(j) for j in i) + '\n' for i in my_table)
         with open("map_sql_files/" + server + "_map_sql_" + str(date.today()) + ".txt", "x", encoding="utf-8") as file:
-            file.write(raw_data)
+            file.write(raw_map_data)
 
 
-def get_data(server):
-    url = "https://" + server + ".travian.com/map.sql"
+def get_map_sql_file(subdomain):
+    url = "https://" + subdomain + ".travian.com/map.sql"
     r = requests.get(url, allow_redirects=True)
     return r.content.decode("utf-8")
 
 
-def find_lines(raw_data):
+def find_villages(raw_data):
     line_starts = []
     line_ends = []
     end = 0
     while raw_data.find(")", end) != -1:
         start = raw_data.find("(", end)
         line_starts.append(start)
-        for i in range(11):
+        for i in range(NUMBER_OF_COLUMNS_CONSTANT):
             start = raw_data.find(",", start) + 1
         line_ends.append(raw_data.find(")", start))
         end = raw_data.find(")", start) + 1
     return line_starts, line_ends
 
 
-def make_table(raw_data, line_starts, line_ends):
-    my_table = [["ID", "x", "y", "Tribe", "VID", "Village", "User_ID", "Player", "AID", "Alliance", "Pop"]]
+def make_table(raw_map_data, line_starts, line_ends):
+    column_names = ["ID", "x", "y", "Tribe", "VID", "Village", "User_ID", "Player", "AID", "Alliance", "Pop"]
+    my_table = [column_names]
     for i in range(min(len(line_ends), len(line_starts))):
-        tmp = split_skip(raw_data[line_starts[i] + 1:line_ends[i]], ",", "'")
-        if len(tmp) != 11:
+        splitted_row = split_skip(raw_map_data[line_starts[i] + 1:line_ends[i]], ",", "'")
+        if len(splitted_row) != NUMBER_OF_COLUMNS_CONSTANT:
+            # needs custom error
             print(i)
-        for j in range(len(tmp)):
-            tmp[j] = tmp[j].replace("'", "")
-        my_table.append(tmp)
+
+        for j in range(len(splitted_row)):
+            splitted_row[j] = splitted_row[j].replace("'", "")
+        my_table.append(splitted_row)
     return my_table
 
 
